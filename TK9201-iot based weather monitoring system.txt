@@ -1,0 +1,133 @@
+from mcp3208 import MCP3208
+import Adafruit_CharLCD as LCD #Import LCD library 
+import Adafruit_DHT #Import DHT Library for sensor
+import RPi.GPIO as GPIO
+import urllib3
+import time
+
+sensor_name = Adafruit_DHT.DHT11 #we are using the DHT11 sensor
+sensor_pin = 17 #The sensor is connected to GPIO17 on Pi
+
+lcd_rs        = 21  #RS of LCD is connected to GPIO 7 on PI
+lcd_en        = 20  #EN of LCD is connected to GPIO 8 on PI 
+lcd_d4        = 16 #D4 of LCD is connected to GPIO 25 on PI
+lcd_d5        = 26 #D5 of LCD is connected to GPIO 24 on PI
+lcd_d6        = 19 #D6 of LCD is connected to GPIO 23 on PI
+lcd_d7        = 13 #D7 of LCD is connected to GPIO 18 on PI
+lcd_backlight =  0  #LED is not connected so we assign to 0
+
+lcd_columns = 16 #for 16*2 LCD
+lcd_rows    = 2 #for 16*2 LCD
+
+lcd = LCD.Adafruit_CharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, 
+                           lcd_columns, lcd_rows, lcd_backlight)   #Send all the pin details to library 
+lcd.clear()
+lcd.set_cursor(0,0)
+lcd.message('IOT base weather')
+lcd.set_cursor(0,1)
+lcd.message('reporting system')
+time.sleep(2) #wait for 2 secs
+adc = MCP3208()
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(27 , GPIO.OUT)
+GPIO.output(27,False)
+time.sleep(0.5)
+while True:
+    lcd.clear()
+    lcd.set_cursor(0,0)
+    lcd.message('data reading..')
+    rain=adc.read(0)
+    light=adc.read(1)
+    time.sleep(0.5)
+    humidity, temperature = Adafruit_DHT.read_retry(sensor_name, sensor_pin)
+    time.sleep(0.5)
+    print('rain:',int(rain),'light:',int(light),'hum:',humidity,'temp:',temperature)
+    lcd.clear()
+    lcd.set_cursor(0,0)
+    lcd.message('T:')
+    lcd.set_cursor(2,0)
+    lcd.message(str(temperature))
+    lcd.set_cursor(6,0)
+    lcd.message('.C')
+    lcd.set_cursor(9,0)
+    lcd.message('H:')
+    lcd.set_cursor(11,0)
+    lcd.message(str(humidity))
+    lcd.set_cursor(15,0)
+    lcd.message('%')
+    lcd.set_cursor(0,1)
+    lcd.message('L:')
+    lcd.set_cursor(2,1)
+    lcd.message(str(light))
+    lcd.set_cursor(9,1)
+    lcd.message('R:')
+    lcd.set_cursor(11,1)
+    lcd.message(str(rain))
+    time.sleep(2)
+    if(rain<2000):
+        print('rain fall detected')
+        lcd.clear()
+        lcd.set_cursor(0,0)
+        lcd.message('rain fall ')
+        lcd.set_cursor(0,1)
+        lcd.message('    detected')
+        time.sleep(1)
+        for i in range(2):  
+                GPIO.output(27,True)
+                time.sleep(1)
+                GPIO.output(27,False)
+                time.sleep(0.5)
+        
+    if(light<4000):
+        print('high light intensisty detected')
+        lcd.clear()
+        lcd.set_cursor(0,0)
+        lcd.message('high light')
+        lcd.set_cursor(0,1)
+        lcd.message('intensisty')
+        time.sleep(1)
+        for i in range(2):  
+                GPIO.output(27,True)
+                time.sleep(1)
+                GPIO.output(27,False)
+                time.sleep(0.5)
+
+    if(temperature > 35):
+        print('high temperature')
+        lcd.clear()
+        lcd.set_cursor(0,0)
+        lcd.message('temperature')
+        lcd.set_cursor(0,1)
+        lcd.message('is high')
+        time.sleep(1)
+        for i in range(2):  
+                GPIO.output(27,True)
+                time.sleep(1)
+                GPIO.output(27,False)
+                time.sleep(0.5)
+
+    if(humidity > 100):
+        print('high temperature')
+        lcd.clear()
+        lcd.set_cursor(0,0)
+        lcd.message('humidity is')
+        lcd.set_cursor(0,1)
+        lcd.message('is high')
+        time.sleep(1)
+        for i in range(2):  
+                GPIO.output(27,True)
+                time.sleep(1)
+                GPIO.output(27,False)
+                time.sleep(0.5)
+                
+    http = urllib3.PoolManager()
+    r = http.request('GET', 'https://api.thingspeak.com/update?api_key=UX4CYRBZG95PPZOO&field1='+str(temperature)+'&field2='+str(humidity)+'&field3='+str(light)+'&field4='+str(rain))
+    print(r.status)
+    print(r.data)
+    lcd.clear()
+    lcd.set_cursor(0,0)
+    lcd.message('data uploded')
+    lcd.set_cursor(0,1)
+    lcd.message('to server')
+    time.sleep(30)

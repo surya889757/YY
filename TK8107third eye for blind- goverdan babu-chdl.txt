@@ -1,0 +1,155 @@
+import RPi.GPIO as GPIO                    #Import GPIO library
+from sim800l import SIM800L
+import time                                #Import time library
+import serial
+import string
+import pynmea2
+GPIO.setmode(GPIO.BOARD)                     #Set GPIO pin numbering 
+
+
+TRIGR= 32                                 #Associate pin 23 to TRIG
+ECHOR= 36                                  #Associate pin 24 to ECHO
+
+TRIG= 38
+ECHO= 40
+
+TRIGL=35
+ECHOL=37
+
+relay=33
+sos=31
+GPIO.setwarnings(False)
+GPIO.setup(TRIGR,GPIO.OUT)                  #Set pin as GPIO out
+GPIO.setup(ECHOR,GPIO.IN)                   #Set pin as GPIO in
+GPIO.setup(TRIG,GPIO.OUT)                  #Set pin as GPIO out
+GPIO.setup(ECHO,GPIO.IN)                   #Set pin as GPIO in
+GPIO.setup(TRIGL,GPIO.OUT)                  #Set pin as GPIO out
+GPIO.setup(ECHOL,GPIO.IN)                   #Set pin as GPIO in
+GPIO.setup(relay,GPIO.OUT)
+GPIO.setup(sos,GPIO.IN,GPIO.PUD_UP)
+
+
+port="/dev/ttyAMA0"
+sim800l=SIM800L('/dev/serial0')
+for i in range(3):  
+                GPIO.output(33,True)
+                time.sleep(0.5)
+                GPIO.output(33,False)
+                time.sleep(0.5)    
+while True:
+  GPIO.output(TRIG, False)                 #Set TRIG as LOW
+  print ("Reading sensor data....")
+  time.sleep(0.5)                            #Delay of 2 seconds
+
+  GPIO.output(TRIG, True)                  #Set TRIG as HIGH
+  time.sleep(0.00001)                      #Delay of 0.00001 seconds
+  GPIO.output(TRIG, False)                 #Set TRIG as LOW
+
+  while GPIO.input(ECHO)==0:               #Check whether the ECHO is LOW
+    pulse_start = time.time()              #Saves the last known time of LOW pulse
+
+  while GPIO.input(ECHO)==1:               #Check whether the ECHO is HIGH
+    pulse_end = time.time()                #Saves the last known time of HIGH pulse 
+
+  pulse_duration = pulse_end - pulse_start #Get pulse duration to a variable
+
+  distance = pulse_duration * 17150        #Multiply pulse duration by 17150 to get distance
+  distance = round(distance, 2)            #Round to two decimal points
+  #print ("sensor f:",(distance))
+
+
+  GPIO.output(TRIGR, False)                 #Set TRIG as LOW
+  
+  time.sleep(0.5)                            #Delay of 2 seconds
+
+  GPIO.output(TRIGR, True)                  #Set TRIG as HIGH
+  time.sleep(0.00001)                      #Delay of 0.00001 seconds
+  GPIO.output(TRIGR, False)                 #Set TRIG as LOW
+
+  while GPIO.input(ECHOR)==0:               #Check whether the ECHO is LOW
+    pulse_start = time.time()              #Saves the last known time of LOW pulse
+
+  while GPIO.input(ECHOR)==1:               #Check whether the ECHO is HIGH
+    pulse_end = time.time()                #Saves the last known time of HIGH pulse 
+
+  pulse_duration_R = pulse_end - pulse_start #Get pulse duration to a variable
+
+  distance_R = pulse_duration_R * 17150        #Multiply pulse duration by 17150 to get distance
+  distance_R = round(distance_R, 2)            #Round to two decimal points
+  GPIO.output(TRIGL, False)                 #Set TRIG as LOW
+  
+  time.sleep(0.5)                            #Delay of 2 seconds
+
+  GPIO.output(TRIGL, True)                  #Set TRIG as HIGH
+  time.sleep(0.00001)                      #Delay of 0.00001 seconds
+  GPIO.output(TRIGL, False)                 #Set TRIG as LOW
+
+  while GPIO.input(ECHOL)==0:               #Check whether the ECHO is LOW
+    pulse_start = time.time()              #Saves the last known time of LOW pulse
+
+  while GPIO.input(ECHOL)==1:               #Check whether the ECHO is HIGH
+    pulse_end = time.time()                #Saves the last known time of HIGH pulse 
+
+  pulse_duration_L = pulse_end - pulse_start #Get pulse duration to a variable
+
+  distance_L = pulse_duration_L * 17150        #Multiply pulse duration by 17150 to get distance
+  distance_L = round(distance_L, 2)            #Round to two decimal points
+
+  print ("sensor right:",(distance_R),"  sensor front:",(distance),"  sensor left:",(distance_L))
+  if distance > 2 and distance < 400:      #Check whether the distance is within range
+    #print "bin status:",distance1,"% free"  #Print distance with 0.5 cm calibration
+    if distance >=2 and distance <12:
+        print ("Front side obstacle occured" )
+        GPIO.output(relay, GPIO.HIGH)                 ## set the pin HIGH for LED ON.
+        time.sleep(2)                           ## wait for 1 sec.
+        GPIO.output(relay, GPIO.LOW)
+        time.sleep(0.1)
+
+
+  if distance_L > 2 and distance_L < 400:      #Check whether the distance is within range
+    #print "bin status:",distance1,"% free"  #Print distance with 0.5 cm calibration
+    if distance_L >=2 and distance_L <12:
+        print ("Left side obstacle occured")
+        GPIO.output(relay, GPIO.HIGH)                 ## set the pin HIGH for LED ON.
+        time.sleep(2)                           ## wait for 1 sec.
+        GPIO.output(relay, GPIO.LOW)
+        time.sleep(0.1)
+  
+   
+
+  if distance_R > 2 and distance_R < 400:      #Check whether the distance is within range
+    #print "bin status:",distance1,"% free"  #Print distance with 0.5 cm calibration
+      if distance_R >=2 and distance_R <12:
+           print ("Right side obstacle occured")
+           GPIO.output(relay, GPIO.HIGH)                 ## set the pin HIGH for LED ON.
+           time.sleep(2)                           ## wait for 1 sec.
+           GPIO.output(relay, GPIO.LOW)
+           time.sleep(0.1)
+
+  
+  if (GPIO.input(sos) == GPIO.LOW):
+    print("Sos key pressed")
+    print('getting gps')
+    ser=serial.Serial(port, baudrate=9600, timeout=0.5)
+    dataout = pynmea2.NMEAStreamReader()
+    newdata=ser.readline()
+    if (newdata[0:6] == b'$GPRMC'):
+                            newmsg=pynmea2.parse(newdata.decode('ASCII'))
+                            lat=round(newmsg.latitude,6)
+                            lng=round(newmsg.longitude,6)
+                            gps = "Latitude=" + str(lat) + " and Longitude=" + str(lng)
+                            msg='emergency i need your help i am at'+gps
+                            print(msg)
+                            sms=msg
+                            dest="9848290997"
+                            sim800l.send_sms(dest,sms)
+                            for i in range(2):  
+                                          GPIO.output(33,True)
+                                          time.sleep(0.5)
+                                          GPIO.output(33,False)
+                                          time.sleep(0.5) 
+                            
+
+  
+
+

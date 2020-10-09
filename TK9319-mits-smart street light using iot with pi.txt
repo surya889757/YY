@@ -1,0 +1,107 @@
+# Import standard python modules
+import time
+import RPi.GPIO as GPIO
+import time
+# import Adafruit IO REST client.
+from Adafruit_IO import Client, Feed, RequestError
+
+P_LED = 21    # adapt to your wiring
+P_FAN=20
+P_LED1=16
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(P_LED,GPIO.OUT)
+GPIO.setup(P_FAN,GPIO.OUT)
+GPIO.setup(P_LED1,GPIO.OUT)
+
+GPIO.setup(17 , GPIO.IN)
+GPIO.setup(2 , GPIO.IN)
+GPIO.setup(3 , GPIO.IN)
+GPIO.setup(4 , GPIO.IN)
+
+# Set to your Adafruit IO key.
+# Remember, your key is a secret,
+# so make sure not to publish it when you publish this code!
+ADAFRUIT_IO_KEY = '065ee7ff3ccd414eabae15673c4ae70d'
+
+# Set to your Adafruit IO username.
+# (go to https://accounts.adafruit.com to find your username)
+ADAFRUIT_IO_USERNAME = 'takeoff'
+
+# Create an instance of the REST client.
+aio = Client(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
+
+try: # if we have a 'digital' feed
+    digital = aio.feeds('l1')
+    digital1 = aio.feeds('f1')
+    digital2 = aio.feeds('light1')
+    
+except RequestError: # create a digital feed
+    feed = Feed(name="l1")
+    digital = aio.create_feed(feed)
+    feed1 = Feed(name="f1")
+    digital1 = aio.create_feed(feed1)
+    feed2 = Feed(name="light1")
+    digital2 = aio.create_feed(feed2)
+
+
+while True:
+    data  = aio.receive(digital.key)
+    data1 = aio.receive(digital1.key)
+    data2 = aio.receive(digital2.key)
+    
+    fire=GPIO.input(17)
+    ir1=GPIO.input(2)
+    ir2=GPIO.input(3)
+    ir3=GPIO.input(4)
+    print('fire:',int(fire),'ir1:',int(ir1),'ir2:',int(ir2),'ir3:',int(ir3))
+    if ((int(data.value) == 1)&(int(data1.value) == 0)&(int(data2.value) == 0)):
+        print('Mode1 <- ON\n')
+        GPIO.output(P_LED,GPIO.HIGH)
+        GPIO.output(P_FAN,GPIO.HIGH)
+        GPIO.output(P_LED1,GPIO.HIGH)
+        
+
+    if ((int(data.value) == 0)&(int(data1.value) == 1)&(int(data2.value) == 0)):
+        print('Mode2 <- ON\n')
+        if(fire == 1):
+            GPIO.output(P_LED,GPIO.HIGH)
+            GPIO.output(P_FAN,GPIO.HIGH)
+            GPIO.output(P_LED1,GPIO.HIGH)
+
+        if(fire == 0):
+            GPIO.output(P_LED,GPIO.LOW)
+            GPIO.output(P_FAN,GPIO.LOW)
+            GPIO.output(P_LED1,GPIO.LOW)
+        
+        
+    if ((int(data.value) == 0)&(int(data1.value) == 0)&(int(data2.value) == 1)):
+        print('Mode3 <- ON\n')
+        if(int(ir1)==0):
+            GPIO.output(P_LED,GPIO.HIGH)
+            #time.sleep(1)
+            
+        if(int(ir1)==1):
+            GPIO.output(P_LED,GPIO.LOW)
+            
+        if(int(ir2)==0):
+            GPIO.output(P_FAN,GPIO.HIGH)
+            #time.sleep(1)
+
+        if(int(ir2)==1):
+            GPIO.output(P_FAN,GPIO.LOW)
+
+        if(int(ir3)==0):
+            GPIO.output(P_LED1,GPIO.HIGH)
+            #time.sleep(1)
+
+        if(int(ir3)==1):
+            GPIO.output(P_LED1,GPIO.LOW)
+            
+    if((int(data.value) == 0)&(int(data1.value) == 0)&(int(data2.value) == 0)):
+        print('all modes  <- OFF\n')
+        GPIO.output(P_LED,GPIO.LOW)
+        GPIO.output(P_FAN,GPIO.LOW)
+        GPIO.output(P_LED1,GPIO.LOW)
+
+    time.sleep(0.5)

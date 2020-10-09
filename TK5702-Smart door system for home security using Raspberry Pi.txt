@@ -1,0 +1,241 @@
+# Import standard python modules
+from subprocess import Popen, PIPE
+import smtplib
+from email.mime.text import MIMEText#email.mime.text.MIMEText(_text[, _subtype[, _charset]])
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase#email.mime.base.MIMEBase(_maintype(e.g. text or image), _subtype(e.g. plain or gif), **_params(e.g.key/value dictionary))
+from email import encoders
+import os.path
+import pygame
+import pygame.camera
+import time
+import RPi.GPIO as GPIO
+import time
+import board
+import digitalio
+import os
+# import Adafruit IO REST client.
+from Adafruit_IO import Client, Feed, RequestError
+import adafruit_character_lcd.character_lcd as characterlcd
+
+
+lcd_columns = 16
+lcd_rows = 2
+ 
+# compatible with all versions of RPI as of Jan. 2019
+# v1 - v3B+
+lcd_rs = digitalio.DigitalInOut(board.D21)
+lcd_en = digitalio.DigitalInOut(board.D20)
+lcd_d4 = digitalio.DigitalInOut(board.D16)
+lcd_d5 = digitalio.DigitalInOut(board.D26)
+lcd_d6 = digitalio.DigitalInOut(board.D19)
+lcd_d7 = digitalio.DigitalInOut(board.D13)
+ 
+ 
+# Initialise the lcd class
+lcd = characterlcd.Character_LCD_Mono(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6,
+                                      lcd_d7, lcd_columns, lcd_rows)
+# looking for an active Ethernet or WiFi device
+def find_interface():
+    find_device = "ip addr show"
+    interface_parse = run_cmd(find_device)
+    for line in interface_parse.splitlines():
+        if "state UP" in line:
+            dev_name = line.split(':')[1]
+    return dev_name
+ 
+# find an active IP on the first LIVE network device
+def parse_ip():
+    find_ip = "ip addr show %s" % interface
+    find_ip = "ip addr show %s" % interface
+    ip_parse = run_cmd(find_ip)
+    for line in ip_parse.splitlines():
+        if "inet " in line:
+            ip = line.split(' ')[5]
+            ip = ip.split('/')[0]
+    return ip
+ 
+# run unix shell command, return as ASCII
+def run_cmd(cmd):
+    p = Popen(cmd, shell=True, stdout=PIPE)
+    output = p.communicate()[0]
+    return output.decode('ascii')
+ 
+
+# wipe LCD screen before we start
+lcd.clear()
+ 
+# before we start the main loop - detect active network device and ip address
+time.sleep(2)
+interface = find_interface()
+#print(interface)
+ip_address = parse_ip()
+#print(ip_address)
+lcd_line_1 ='wlan conneted: \n'
+# current ip address
+lcd_line_2 = ip_address
+ 
+# combine both lines into one update to the display
+lcd.message = lcd_line_1 + lcd_line_2
+time.sleep(2)
+
+lcd.clear()
+lcd_line_1 ='Smart door \n'
+lcd_line_2 = 'security system'
+lcd.message = lcd_line_1 + lcd_line_2
+time.sleep(2)
+P_LED = 3    # adapt to your wiring
+P_FAN=4
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(P_LED,GPIO.OUT)
+GPIO.setup(P_FAN,GPIO.OUT)
+GPIO.setup(17 , GPIO.IN)
+lcd.clear()
+lcd_line_1 ='System ready \n'
+lcd_line_2 = ' '
+lcd.message = lcd_line_1 + lcd_line_2
+time.sleep(2)
+
+width = 320
+height = 240
+pygame.init()
+pygame.camera.init()
+
+
+email = 'project.ece222@gmail.com'
+password = 'eceece143@'
+send_to_email = 'project.ece222@gmail.com'
+subject = 'Message Alert From Home!'
+
+
+  
+
+# Set to your Adafruit IO key.
+# Remember, your key is a secret,
+# so make sure not to publish it when you publish this code!
+ADAFRUIT_IO_KEY = '065ee7ff3ccd414eabae15673c4ae70d'
+
+# Set to your Adafruit IO username.
+# (go to https://accounts.adafruit.com to find your username)
+ADAFRUIT_IO_USERNAME = 'takeoff'
+
+# Create an instance of the REST client.
+aio = Client(ADAFRUIT_IO_USERNAME, ADAFRUIT_IO_KEY)
+
+try: # if we have a 'digital' feed
+    digital = aio.feeds('l1')
+    digital1 = aio.feeds('f1')
+except RequestError: # create a digital feed
+    feed = Feed(name="l1")
+    digital = aio.create_feed(feed)
+    feed1 = Feed(name="f1")
+    digital1 = aio.create_feed(feed1)
+
+count=1
+count1=1
+
+while True:
+    fire=GPIO.input(17)
+    print('switch:',int(fire))
+    data = aio.receive(digital.key)
+    data1= aio.receive(digital1.key)
+    lcd.clear()
+    
+    
+    if int(data.value) == 1:
+        print('Door unlocked\n')
+        if(count == 1):
+                GPIO.output(P_LED,GPIO.HIGH)
+                GPIO.output(P_FAN,GPIO.LOW)
+                time.sleep(1)
+                GPIO.output(P_LED,GPIO.LOW)
+                GPIO.output(P_FAN,GPIO.LOW)
+                lcd.clear()
+                lcd_line_1 ='Door Unlocked \n'
+                lcd_line_2 = ' '
+                lcd.message = lcd_line_1 + lcd_line_2
+                time.sleep(2)
+                count=2
+               
+        
+    if int(data.value) == 0:
+        print('Door is locked ')
+        if(count == 2):
+                GPIO.output(P_LED,GPIO.LOW)
+                GPIO.output(P_FAN,GPIO.HIGH)
+                time.sleep(1)
+                GPIO.output(P_LED,GPIO.LOW)
+                GPIO.output(P_FAN,GPIO.LOW)
+                lcd.clear()
+                lcd_line_1 ='Door locked \n'
+                lcd_line_2 = ' '
+                lcd.message = lcd_line_1 + lcd_line_2
+                time.sleep(2)
+                count=1
+
+    if int(data1.value) == 1:
+                print('No body in the house come later')
+                lcd.clear()
+                lcd_line_1 ='No body in the \n'
+                lcd_line_2 = 'house come later'
+                lcd.message = lcd_line_1 + lcd_line_2
+                time.sleep(2)
+        
+        
+
+    if(int(fire) == 0):
+        print('Sensor detected')
+        lcd.clear()
+        lcd_line_1 ='Person detected  \n'
+        lcd_line_2 = ' '
+        lcd.message = lcd_line_1 + lcd_line_2
+        time.sleep(0.1)
+        if(count1==1):    
+                        
+                        cam = pygame.camera.Camera("/dev/video0",(width,height))
+                        window = pygame.display.set_mode((width,height),pygame.RESIZABLE)
+                        cam.start()
+                        image = cam.get_image()
+                        cam.stop()
+                        window.blit(image,(0,0))
+                        pygame.display.update()
+                        pygame.image.save(window,'user.jpg')
+                        file_location = '//home//pi//user.jpg'
+                        message = 'Hi there infront your house someone is there here am attatching the image of that person respond soon'
+                        msg = MIMEMultipart()#Create the container (outer) email message.
+                        msg['From'] = email
+                        msg['To'] = send_to_email
+                        msg['Subject'] = subject
+                        msg.attach(MIMEText(message, 'plain'))#attach new  message by using the Message.attach
+
+                        filename = os.path.basename(file_location)#function returns the tail of the path
+                        attachment = open(file_location, "rb") #“rb” (read binary)
+                        part = MIMEBase('application', 'octet-stream')#Content-Type: application/octet-stream , image/png, application/pdf
+                        part.set_payload((attachment).read())
+                        encoders.encode_base64(part)
+                        part.add_header('Content-Disposition', "attachment; filename= %s" % filename)#Content-Disposition: attachment; filename="takeoff.png"
+
+                        msg.attach(part)
+
+                        server = smtplib.SMTP('smtp.gmail.com', 587)# Send the message via local SMTP server.
+                        server.starttls()# sendmail function takes 3 arguments: sender's address, recipient's address and message to send 
+                        server.login(email, password)
+                        text = msg.as_string()
+                        server.sendmail(email, send_to_email, text)
+                        server.quit()
+                        print("Mail alert sent")
+                        lcd.clear()
+                        lcd_line_1 ='Mail alert sent\n'
+                        lcd_line_2 = ' '
+                        lcd.message = lcd_line_1 + lcd_line_2
+                        time.sleep(2)
+                        
+            
+    if(int(fire) == 1):
+        count1=1
+
+    
+        
+    # timeout so we dont flood adafruit-io with requests
+    time.sleep(0.1)
